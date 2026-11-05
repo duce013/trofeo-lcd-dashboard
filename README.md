@@ -36,8 +36,8 @@
 The default look is a near-black, cyan-accented theme with chamfered cards, made to match a white ROG build with ice-blue fans.
 
 <p align="center">
-  <img src="docs/in_case.jpg" width="300" alt="The Trofeo LCD mounted vertically inside the case"><br>
-  <sub>Mounted vertically inside the case (photo from an earlier build of the dashboard).</sub>
+  <img src="docs/screen.png" width="260" alt="Live capture of the LCD with a looping video"><br>
+  <sub>Live capture of the LCD — vertical mount, with a looping video in the bottom area.</sub>
 </p>
 
 ## Requirements
