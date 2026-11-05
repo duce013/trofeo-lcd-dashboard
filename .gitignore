@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+*.log
+out/
+build/
+dist/
+*.spec
+
+# local machine config / helpers
+panel_config.json
+NOTES-CLAUDE.md
+start.bat
+stop.bat
+stop.ps1
+dash/start_dashboard.bat
+dash/old-statusLine.backup.txt
+
+*.png
+!docs/*.png
+!docs/*.gif
+!dash/duce.png

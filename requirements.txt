@@ -1,0 +1,8 @@
+pyusb>=1.2.1
+libusb-package>=1.0.26
+mss>=9.0.1
+psutil>=5.9.0
+pythonnet>=3.0.3
+Pillow>=9.5.0
+opencv-python-headless>=4.8
+customtkinter>=5.2
