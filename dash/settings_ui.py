@@ -13,6 +13,10 @@ from PIL import Image
 
 import lcd_dashboard as dash
 import media
+import updater
+from version import VERSION
+
+ORIENT = {"Vertical": "portrait", "Horizontal": "landscape"}
 
 HERE = os.path.dirname(os.path.abspath(__file__))  # in the exe this is the unpack folder
 LOGO_PNG, LOGO_ICO = os.path.join(HERE, "duce.png"), os.path.join(HERE, "duce.ico")
@@ -103,6 +107,15 @@ class Settings:
         bottom.pack(side="bottom", fill="x", padx=14, pady=20)
         self.status = ctk.CTkLabel(bottom, text="", font=font(12), text_color=ACC, wraplength=180, justify="left")
         self.status.pack(anchor="w", pady=(0, 10))
+        ver = ctk.CTkFrame(bottom, fg_color="transparent")
+        ver.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(ver, text=f"v{VERSION}", font=font(12, num=True), text_color=DIM).pack(side="left")
+        self.update_btn = ctk.CTkButton(ver, text="Check for updates", height=28, corner_radius=8, font=font(12),
+                                        fg_color="transparent", border_width=1, border_color=BORDER,
+                                        hover_color=HOVER, text_color=ACC, command=self.check_update)
+        self.update_btn.pack(side="right")
+        self.update_info = None
+        threading.Thread(target=self._check_quietly, daemon=True).start()
         ctk.CTkButton(bottom, text="Save", height=44, corner_radius=12, font=font(15, "bold"),
                       fg_color=ACC, hover_color="#22c4cf", text_color="#031014", command=self.apply).pack(fill="x")
         ctk.CTkButton(bottom, text="Reset", height=34, corner_radius=10, font=font(12),
@@ -155,7 +168,16 @@ class Settings:
 
     # ── pages ───────────────────────────────────────────────────────
     def page_layout(self, p):
-        self.header(p, "Layout", "What shows on the screen, top to bottom")
+        self.header(p, "Layout", "How the screen is mounted and what it shows")
+        o = self.card(p, "Orientation")
+        now = self.current_orientation() or self.cfg.get("orientation", "portrait")
+        self.orient = tk.StringVar(value="Horizontal" if now == "landscape" else "Vertical")
+        ctk.CTkSegmentedButton(o, values=list(ORIENT), variable=self.orient, font=font(13), height=36,
+                               corner_radius=10, fg_color="#0b1419", selected_color=ACC_DARK,
+                               selected_hover_color=ACC_DARK, unselected_color="#0b1419",
+                               unselected_hover_color=HOVER, text_color=FG).pack(anchor="w", padx=20, pady=(4, 6))
+        ctk.CTkLabel(o, text="Vertical: 462×1920, sections stack top to bottom. Horizontal: 1920×462, sections side by side.",
+                     font=font(12), text_color=DIM).pack(anchor="w", padx=20, pady=(0, 16))
         c = self.card(p, "Sections")
         self.rows = ctk.CTkFrame(c, fg_color="transparent")
         self.rows.pack(fill="x", padx=12, pady=(0, 12))
@@ -347,15 +369,88 @@ class Settings:
         cfg["media"] = {"path": self.media_path.get(),
                         "fit": "contain" if self.fit.get() == "Fit whole" else "cover"}
         cfg["theme"] = self.colors
+        cfg["orientation"] = ORIENT[self.orient.get()]
         cfg["hidden_devices"] = [n for n, v in self.dev_vars.items() if not v.get()]
         cfg["title"] = self.title.get()
         cfg["items"] = [ln for ln in self.notes.get("1.0", "end").splitlines() if ln.strip()]
         return cfg
 
+    # ── orientation ─────────────────────────────────────────────────
+    @staticmethod
+    def current_orientation():
+        try:
+            import extended_display
+            return extended_display.current_orientation()
+        except Exception:
+            return None
+
+    def apply_orientation(self, want):
+        if want == self.current_orientation():
+            return ""
+        try:
+            import extended_display
+            ok = extended_display.set_orientation(want == "portrait")
+        except Exception:
+            ok = False
+        return "\nScreen turned — it restarts in a few seconds" if ok else "\nCouldn't turn the screen (is it connected?)"
+
+    # ── updates ─────────────────────────────────────────────────────
+    def _check_quietly(self):
+        try:
+            tag, url, page = updater.latest()
+        except Exception:
+            return  # offline: stay silent, the button still works
+        if url and updater.is_newer(tag):
+            self.update_info = (tag, url)
+            self.root.after(0, lambda: self.update_btn.configure(text=f"Update to {tag}", fg_color=ACC,
+                                                                   text_color="#031014", hover_color="#22c4cf"))
+
+    def check_update(self):
+        self.flash("Checking for updates…")
+
+        def work():
+            try:
+                tag, url, page = updater.latest()
+            except Exception as e:
+                self.root.after(0, self.flash, f"Update check failed:\n{e}")
+                return
+            if not url or not updater.is_newer(tag):
+                self.root.after(0, self.flash, f"✓ You're up to date (v{VERSION})")
+                return
+            self.root.after(0, self.offer_update, tag, url)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def offer_update(self, tag, url):
+        if not messagebox.askyesno("Update available", f"Version {tag} is available (you have v{VERSION}).\n\n"
+                                   "Download and install it now? The screen restarts for a moment."):
+            self.flash("")
+            return
+        self.flash("Downloading update…")
+
+        def work():
+            try:
+                exe = updater.download(url, progress=lambda f: self.root.after(0, self.flash, f"Downloading… {f * 100:.0f}%"))
+            except Exception as e:
+                self.root.after(0, self.flash, f"Download failed:\n{e}")
+                return
+            self.root.after(0, self.install_update, exe)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def install_update(self, exe):
+        if updater.run_installer(exe):
+            self.flash("Installing…")
+            self.root.after(1500, self.root.destroy)  # the installer closes old copies anyway
+        else:
+            self.flash("Install was cancelled")
+
     def apply(self):
         try:
-            save(self.collect())
-            self.flash("✓ Saved\nThe LCD updates in 2 s")
+            cfg = self.collect()
+            save(cfg)
+            note = self.apply_orientation(cfg["orientation"])
+            self.flash("✓ Saved\nThe LCD updates in 2 s" + note)
         except (OSError, ValueError, tk.TclError) as e:
             messagebox.showerror("Save", str(e))
 

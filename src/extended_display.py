@@ -148,6 +148,41 @@ def list_displays():
     return out
 
 
+DM_DISPLAYORIENTATION = 0x00000080
+
+
+def set_orientation(portrait: bool) -> bool:
+    """Turn the panel's virtual display to portrait (462x1920, 90°) or landscape (1920x462).
+
+    No admin needed. The mirror notices the new shape and restarts with the matching rotation.
+    """
+    user32 = ctypes.windll.user32
+    for name, w, h, prim in list_displays():
+        if prim or not is_target(w, h):
+            continue
+        dm = DEVMODE()
+        dm.dmSize = ctypes.sizeof(DEVMODE)
+        if not user32.EnumDisplaySettingsW(name, -1, ctypes.byref(dm)):
+            return False
+        want = 1 if portrait else 0  # DMDO_90 / DMDO_DEFAULT
+        if dm.dmDisplayOrientation == want:
+            return True
+        if (dm.dmPelsWidth > dm.dmPelsHeight) == portrait:  # width/height swap with the turn
+            dm.dmPelsWidth, dm.dmPelsHeight = dm.dmPelsHeight, dm.dmPelsWidth
+        dm.dmDisplayOrientation = want
+        dm.dmFields = DM_DISPLAYORIENTATION | DM_PELSWIDTH | DM_PELSHEIGHT
+        return user32.ChangeDisplaySettingsExW(name, ctypes.byref(dm), None, CDS_UPDATEREGISTRY, None) == 0
+    return False
+
+
+def current_orientation() -> str | None:
+    """'portrait', 'landscape' or None if the panel display isn't there."""
+    for _, w, h, prim in list_displays():
+        if not prim and is_target(w, h):
+            return "portrait" if h > w else "landscape"
+    return None
+
+
 def ensure_virtual_display():
     """确保存在一块 1920x462 的非主显示器。必要时启用 usbmmidd 并设置模式。
 
@@ -279,6 +314,7 @@ def main():
 
     restarts = 0
     while True:
+        portrait = None
         try:
             ensure_virtual_display()
             idx = find_monitor_index()
@@ -308,8 +344,11 @@ def main():
         except BaseException as e:          # noqa: BLE001 — 守护进程必须活下去
             why = f"异常 {type(e).__name__}: {e}"
 
-        restarts += 1
-        delay = min(30, 3 * restarts)
+        if portrait is not None and current_orientation() != ("portrait" if portrait else "landscape"):
+            delay = 1  # user switched orientation in Settings: come back fast, not a failure
+        else:
+            restarts += 1
+            delay = min(30, 3 * restarts)
         print(f"[{time.strftime('%H:%M:%S')}] [supervisor] 镜像结束（{why}），"
               f"{delay}s 后重启（第 {restarts} 次）")
         try:

@@ -42,6 +42,15 @@ MAX_JPEG = 440_000
 KEEPALIVE_S = 1.5
 IDLE_PERIOD = 0.2   # 画面静止时的抓屏间隔（秒）
 IDLE_AFTER = 12     # unchanged captures in a row before slowing down (~0.5 s at 24 fps)
+ORIENT_CHECK_S = 1.0
+
+
+def current_orientation():
+    try:
+        import extended_display  # late import: extended_display imports this module
+        return extended_display.current_orientation()
+    except Exception:
+        return None
 
 # 看门狗：改显示器配置/驱动重置会让 WinUSB 句柄静默失效——写入不报错但数据
 # 进不到屏里，表现为画面永久冻结在最后一帧。以下两个阈值用来判定"发送停滞"。
@@ -281,6 +290,9 @@ def refresh_region(sct, args, current):
     if idx >= len(mons):
         return current
     live = mons[idx]
+    if (live["width"], live["height"]) == (current["height"], current["width"]) != (current["width"], current["height"]):
+        # portrait <-> landscape: rotation is chosen at start, so let the supervisor restart us
+        raise SystemExit("display orientation changed")
     if (live["left"], live["top"], live["width"], live["height"]) == (
             current["left"], current["top"], current["width"], current["height"]):
         return current
@@ -357,6 +369,7 @@ def main():
         last_sig = None
         last_emit = 0.0
         still = 0                 # consecutive unchanged captures
+        orient_checked = time.time()
         fails = 0                 # 连续抓屏失败次数
         total_fails = 0           # 累计失败次数（排查用）
         try:
@@ -395,6 +408,13 @@ def main():
                         print(f"[{ts()}] [warn] 重建失败，1s 后重试:", e2)
                         time.sleep(1.0)
                     continue
+                if time.time() - orient_checked > ORIENT_CHECK_S:
+                    # mss caches monitor sizes and happily grabs a stale area after the display is
+                    # turned, so ask Windows directly; rotation is picked at start -> restart.
+                    orient_checked = time.time()
+                    o = current_orientation()
+                    if o and (o == "portrait") != (args.rotate in (90, 270)):
+                        raise SystemExit("display orientation changed")
                 img = Image.frombytes("RGB", raw.size, raw.rgb)
                 # 90/270: compose in portrait space (panel on top, cursor mapped), rotate at the end
                 fw, fh = (th, tw) if args.rotate in (90, 270) else (tw, th)

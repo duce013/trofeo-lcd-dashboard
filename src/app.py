@@ -156,8 +156,8 @@ def install():
         f"Driver installer said:\n{(r.stdout or r.stderr).strip()[:300]}\n\n"
         f"Uninstall: {EXE} --uninstall")
     subprocess.Popen([EXE, "--run"], creationflags=NO_WINDOW)
-    import settings_ui
-    settings_ui.main()
+    # open settings from the installed copy and exit, so the downloaded exe isn't kept locked
+    subprocess.Popen([EXE, "--settings"], creationflags=NO_WINDOW)
 
 
 def uninstall():

@@ -24,7 +24,8 @@
 | <img src="docs/dashboard.png" width="230" alt="Dashboard"> | <img src="docs/settings_layout.png" width="520" alt="Layout settings"><br><img src="docs/settings_colors.png" width="520" alt="Color settings"><br><img src="docs/settings_media.png" width="520" alt="Video settings"> |
 
 - **Extended display** — the 1920×462 panel shows up in Windows like any monitor. Drag windows onto it, or let the dashboard fill it.
-- **Vertical or horizontal mounting** — follows the orientation you set in Windows display settings (portrait 462×1920 or landscape 1920×462).
+- **Vertical or horizontal mounting** — pick *Vertical* (462×1920) or *Horizontal* (1920×462) in Settings → Layout. The screen turns on the spot and the dashboard re-flows: stacked top to bottom when vertical, side by side when horizontal (the hardware card wraps into columns).
+- **Built-in updates** — Settings shows the version and a *Check for updates* button; new GitHub releases are downloaded and installed in one click (it also checks quietly when Settings opens).
 - **Live dashboard**
   - **Memory**: usage ring, used / free / total, and the processes using the most RAM.
   - **Hardware**: CPU, GPU, disks and fans in the style of HWMonitor (load, temperature, clock, power, VRAM, RPM). Powered by LibreHardwareMonitor.
@@ -101,6 +102,14 @@ build_exe.bat            # -> dist\TrofeoLCD.exe
 ```
 
 Run without building: `.venv\Scripts\python.exe src\app.py --run` (as administrator, for CPU temperatures and the virtual display).
+
+### Releasing a new version
+
+1. Bump `VERSION` in `dash/version.py` (e.g. `1.2.0`).
+2. Run `build_exe.bat`.
+3. Publish a GitHub release tagged `v1.2.0` with `dist\TrofeoLCD.exe` attached (the asset name must stay `TrofeoLCD.exe`).
+
+Installed copies (v1.1.0 and later) will offer the update from their settings window.
 
 ### Project layout
 
